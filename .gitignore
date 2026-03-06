@@ -1,0 +1,26 @@
+# Go build files
+
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build folders
+
+bin/
+
+# Temporary files
+
+*.log
+*.tmp
+*.swp
+
+# IDE
+
+.vscode/
+.idea/
+
+# OS
+
+.DS_Store
