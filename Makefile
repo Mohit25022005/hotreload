@@ -1,8 +1,8 @@
 build:
-	go build -o hotreload ./cmd/hotreload
+	go build -o hotreload.exe ./cmd/hotreload
 
-demo:
-	go build -o ./bin/server ./testserver
-	./hotreload --root ./testserver \
-	--build "go build -o ./bin/server ./testserver" \
-	--exec "./bin/server"
+run:
+	.\hotreload.exe --root ./testserver --build "go build -o ./bin/server.exe ./testserver" --exec ./bin/server.exe
+
+test:
+	go test ./...

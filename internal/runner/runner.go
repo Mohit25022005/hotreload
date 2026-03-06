@@ -30,7 +30,6 @@ func (r *Runner) Restart() {
 
 	r.stopLocked()
 
-	// crash loop protection
 	if time.Since(r.lastStart) < 2*time.Second {
 		r.logger.Warn("server restarted too quickly, delaying")
 		time.Sleep(2 * time.Second)
@@ -53,6 +52,14 @@ func (r *Runner) Restart() {
 	r.lastStart = time.Now()
 }
 
+func (r *Runner) Stop() {
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.stopLocked()
+}
+
 func (r *Runner) stopLocked() {
 
 	if r.cmd == nil || r.cmd.Process == nil {
@@ -63,9 +70,10 @@ func (r *Runner) stopLocked() {
 
 	err := r.cmd.Process.Kill()
 	if err != nil {
-		r.logger.Warn("process already stopped or cannot be killed", "error", err)
+		r.logger.Warn("process already stopped", "error", err)
 	}
 
 	_, _ = r.cmd.Process.Wait()
+
 	r.cmd = nil
 }

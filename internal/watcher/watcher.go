@@ -68,7 +68,6 @@ func (w *Watcher) Start() {
 
 			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove) != 0 {
 
-				// detect new directories
 				info, err := os.Stat(event.Name)
 				if err == nil && info.IsDir() {
 					w.logger.Info("new directory detected", "path", event.Name)

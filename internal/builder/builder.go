@@ -27,7 +27,6 @@ func (b *Builder) Build() error {
 
 	b.mu.Lock()
 
-	// Cancel previous build if running
 	if b.cancel != nil {
 		b.logger.Warn("canceling previous build")
 		b.cancel()
@@ -42,7 +41,6 @@ func (b *Builder) Build() error {
 
 	cmd := exec.CommandContext(ctx, "cmd", "/C", b.command)
 
-	// Stream logs in real time
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -58,7 +56,7 @@ func (b *Builder) Build() error {
 		return err
 	}
 
-	b.logger.Info("build completed successfully")
+	b.logger.Info("build completed")
 
 	return nil
 }
