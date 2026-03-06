@@ -16,7 +16,7 @@ type Watcher struct {
 	Events  chan struct{}
 }
 
-func New(root string, trigger func(), logger *slog.Logger) (*Watcher, error) {
+func New(root string, logger *slog.Logger) (*Watcher, error) {
 
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -31,6 +31,10 @@ func New(root string, trigger func(), logger *slog.Logger) (*Watcher, error) {
 	}
 
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+
+		if err != nil {
+			return err
+		}
 
 		if info.IsDir() && !shouldIgnore(path) {
 			w.Add(path)
@@ -58,9 +62,16 @@ func (w *Watcher) Start() {
 				continue
 			}
 
+			if !shouldWatch(event.Name) {
+				continue
+			}
+
 			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove) != 0 {
 
-				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+				// detect new directories
+				info, err := os.Stat(event.Name)
+				if err == nil && info.IsDir() {
+					w.logger.Info("new directory detected", "path", event.Name)
 					w.watcher.Add(event.Name)
 				}
 
@@ -76,20 +87,37 @@ func (w *Watcher) Start() {
 	}
 }
 
+func shouldWatch(path string) bool {
+
+	ext := filepath.Ext(path)
+
+	switch ext {
+	case ".go", ".mod", ".sum":
+		return true
+	}
+
+	return false
+}
+
 func shouldIgnore(path string) bool {
 
 	ignore := []string{
 		".git",
 		"node_modules",
 		"bin",
-		".swp",
-		".tmp",
+		"tmp",
 	}
 
-	for _, i := range ignore {
-		if strings.Contains(path, i) {
+	for _, dir := range ignore {
+		if strings.Contains(path, dir) {
 			return true
 		}
+	}
+
+	if strings.HasSuffix(path, "~") ||
+		strings.HasSuffix(path, ".swp") ||
+		strings.HasSuffix(path, ".tmp") {
+		return true
 	}
 
 	return false

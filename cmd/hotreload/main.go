@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"log/slog"
 	"os"
@@ -17,6 +16,7 @@ func main() {
 	root := flag.String("root", ".", "project root")
 	buildCmd := flag.String("build", "", "build command")
 	execCmd := flag.String("exec", "", "run command")
+
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -26,7 +26,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	buildManager := builder.New(*buildCmd, logger)
+	logger.Info("🔥 HotReload started", "root", *root)
+
+	builder := builder.New(*buildCmd, logger)
 	runner := runner.New(*execCmd, logger)
 
 	debouncer := debounce.New(500)
@@ -35,18 +37,15 @@ func main() {
 
 		logger.Info("change detected")
 
-		ctx := context.Background()
-
-		err := buildManager.Build(ctx)
+		err := builder.Build()
 		if err != nil {
-			logger.Error("build failed", "error", err)
 			return
 		}
 
 		runner.Restart()
 	}
 
-	w, err := watcher.New(*root, trigger, logger)
+	w, err := watcher.New(*root, logger)
 	if err != nil {
 		logger.Error("watcher failed", "error", err)
 		os.Exit(1)

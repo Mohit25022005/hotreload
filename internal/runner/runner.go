@@ -4,24 +4,37 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"sync"
+	"time"
 )
 
 type Runner struct {
-	command string
-	cmd     *exec.Cmd
-	logger  *slog.Logger
+	command   string
+	cmd       *exec.Cmd
+	logger    *slog.Logger
+	lastStart time.Time
+	mu        sync.Mutex
 }
 
-func New(cmd string, logger *slog.Logger) *Runner {
+func New(command string, logger *slog.Logger) *Runner {
 	return &Runner{
-		command: cmd,
+		command: command,
 		logger:  logger,
 	}
 }
 
 func (r *Runner) Restart() {
 
-	r.Stop()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.stopLocked()
+
+	// crash loop protection
+	if time.Since(r.lastStart) < 2*time.Second {
+		r.logger.Warn("server restarted too quickly, delaying")
+		time.Sleep(2 * time.Second)
+	}
 
 	r.logger.Info("starting server")
 
@@ -37,9 +50,10 @@ func (r *Runner) Restart() {
 	}
 
 	r.cmd = cmd
+	r.lastStart = time.Now()
 }
 
-func (r *Runner) Stop() {
+func (r *Runner) stopLocked() {
 
 	if r.cmd == nil || r.cmd.Process == nil {
 		return
@@ -53,6 +67,5 @@ func (r *Runner) Stop() {
 	}
 
 	_, _ = r.cmd.Process.Wait()
-
 	r.cmd = nil
 }
