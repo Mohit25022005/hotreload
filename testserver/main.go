@@ -15,7 +15,7 @@ type Health struct {
 func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, " HotReload Demo Server")
+		fmt.Fprintln(w, " HotsgsRel Demo Server from recruiter ")
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

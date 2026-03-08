@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"hotreload/internal/logx"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,14 +31,18 @@ func New(root string, logger *slog.Logger) (*Watcher, error) {
 		Events:  make(chan struct{}, 1),
 	}
 
-	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 
 		if err != nil {
 			return err
 		}
 
-		if info.IsDir() && !shouldIgnore(path) {
-			w.Add(path)
+		if d.IsDir() && !shouldIgnore(path) {
+
+			err := w.Add(path)
+			if err != nil {
+				logger.Warn("failed to watch directory", "path", path, "error", err)
+			}
 		}
 
 		return nil
@@ -52,27 +57,48 @@ func New(root string, logger *slog.Logger) (*Watcher, error) {
 
 func (w *Watcher) Start() {
 
+	logx.Watch("watching for file changes")
+
 	for {
 
 		select {
 
-		case event := <-w.watcher.Events:
+		case event, ok := <-w.watcher.Events:
+
+			if !ok {
+				return
+			}
 
 			if shouldIgnore(event.Name) {
 				continue
+			}
+
+			// handle new directories
+			if event.Op&fsnotify.Create != 0 {
+
+				info, err := os.Stat(event.Name)
+				if err == nil && info.IsDir() {
+
+					err := w.watcher.Add(event.Name)
+					if err == nil {
+						w.logger.Info("new directory detected", "path", event.Name)
+					}
+
+					continue
+				}
 			}
 
 			if !shouldWatch(event.Name) {
 				continue
 			}
 
-			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove) != 0 {
-
-				info, err := os.Stat(event.Name)
-				if err == nil && info.IsDir() {
-					w.logger.Info("new directory detected", "path", event.Name)
-					w.watcher.Add(event.Name)
-				}
+			// editor safe detection
+			if event.Op&(fsnotify.Write|
+				fsnotify.Create|
+				fsnotify.Remove|
+				fsnotify.Rename|
+				fsnotify.Chmod) != 0 {
+				logx.Watch("file change detected")
 
 				select {
 				case w.Events <- struct{}{}:
@@ -80,22 +106,35 @@ func (w *Watcher) Start() {
 				}
 			}
 
-		case err := <-w.watcher.Errors:
+		case err, ok := <-w.watcher.Errors:
+
+			if !ok {
+				return
+			}
+
 			w.logger.Error("watch error", "error", err)
 		}
 	}
 }
 
+func (w *Watcher) Close() error {
+	return w.watcher.Close()
+}
+
 func shouldWatch(path string) bool {
 
-	ext := filepath.Ext(path)
-
-	switch ext {
-	case ".go", ".mod", ".sum":
-		return true
+	if shouldIgnore(path) {
+		return false
 	}
 
-	return false
+	// ignore editor temporary files
+	if strings.HasSuffix(path, "~") ||
+		strings.HasSuffix(path, ".swp") ||
+		strings.HasSuffix(path, ".tmp") {
+		return false
+	}
+
+	return true
 }
 
 func shouldIgnore(path string) bool {
@@ -105,6 +144,8 @@ func shouldIgnore(path string) bool {
 		"node_modules",
 		"bin",
 		"tmp",
+		".idea",
+		".vscode",
 	}
 
 	for _, dir := range ignore {
@@ -115,7 +156,8 @@ func shouldIgnore(path string) bool {
 
 	if strings.HasSuffix(path, "~") ||
 		strings.HasSuffix(path, ".swp") ||
-		strings.HasSuffix(path, ".tmp") {
+		strings.HasSuffix(path, ".tmp") ||
+		strings.HasSuffix(path, ".log") {
 		return true
 	}
 

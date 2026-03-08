@@ -2,10 +2,12 @@ package builder
 
 import (
 	"context"
+	"hotreload/internal/logx"
 	"log/slog"
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 type Builder struct {
@@ -27,6 +29,7 @@ func (b *Builder) Build() error {
 
 	b.mu.Lock()
 
+	// cancel previous build if running
 	if b.cancel != nil {
 		b.logger.Warn("canceling previous build")
 		b.cancel()
@@ -37,7 +40,9 @@ func (b *Builder) Build() error {
 
 	b.mu.Unlock()
 
-	b.logger.Info("building project")
+	start := time.Now()
+
+	logx.Build("building project")
 
 	cmd := exec.CommandContext(ctx, "cmd", "/C", b.command)
 
@@ -46,17 +51,26 @@ func (b *Builder) Build() error {
 
 	err := cmd.Run()
 
+	// clear cancel after build finishes
+	b.mu.Lock()
+	b.cancel = nil
+	b.mu.Unlock()
+
 	if ctx.Err() == context.Canceled {
 		b.logger.Warn("build canceled due to new changes")
 		return ctx.Err()
 	}
 
 	if err != nil {
+		logx.Error("build failed")
 		b.logger.Error("build failed", "error", err)
 		return err
 	}
 
-	b.logger.Info("build completed")
+	duration := time.Since(start)
+
+	logx.Build("build completed")
+	b.logger.Info("build finished", "duration", duration)
 
 	return nil
 }

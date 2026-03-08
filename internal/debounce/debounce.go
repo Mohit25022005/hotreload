@@ -22,9 +22,29 @@ func (d *Debouncer) Trigger(fn func()) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	// stop previous timer safely
 	if d.timer != nil {
-		d.timer.Stop()
+		if !d.timer.Stop() {
+			select {
+			case <-d.timer.C:
+			default:
+			}
+		}
 	}
 
-	d.timer = time.AfterFunc(d.delay, fn)
+	// create new timer
+	d.timer = time.AfterFunc(d.delay, func() {
+		fn()
+	})
+}
+
+func (d *Debouncer) Cancel() {
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.timer != nil {
+		d.timer.Stop()
+		d.timer = nil
+	}
 }
